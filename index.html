@@ -1,0 +1,479 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Kangaroo Agentic Marketplace</title>
+    <!-- Tailwind (Play CDN) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- React 18 UMD + ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+  </head>
+  <body class="bg-gray-50">
+    <div id="root"></div>
+
+    <script>
+
+// === Agentic Marketplace (Single-file UMD build) ===
+// Uses React 18 UMD + Tailwind CDN. No build step required.
+
+const { useMemo, useState } = React;
+
+// ---- Stage model -----------------------------------------------------------
+const STAGES = ["IDEA", "IN_DEVELOPMENT", "VALIDATED", "LIVE", "RETIRED"];
+const STAGE_COLORS = {
+  IDEA: "bg-gray-100 text-gray-700",
+  IN_DEVELOPMENT: "bg-amber-100 text-amber-700",
+  VALIDATED: "bg-blue-100 text-blue-700",
+  LIVE: "bg-emerald-100 text-emerald-700",
+  RETIRED: "bg-gray-200 text-gray-600",
+};
+
+function StatusPill({ status }) {
+  const cls = STAGE_COLORS[status] || "bg-gray-100 text-gray-700";
+  return React.createElement("span", { className: `px-2 py-1 text-xs rounded-full ${cls}` }, String(status).replace(/_/g, " "));
+}
+
+function Pill({ children, tone }) {
+  return React.createElement("span", { className: `px-2 py-1 rounded-full text-xs ${tone || "bg-gray-100 text-gray-700"}` }, children);
+}
+
+function ProgressBar({ value }) {
+  const v = Math.max(0, Math.min(100, Number(value) || 0));
+  return (
+    <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
+      <div className="h-2" style={{ width: `${v}%`, background: "#E4002B" }} />
+    </div>
+  );
+}
+
+function Stat({ title, value, icon }) {
+  return (
+    <div className="p-4 border rounded-2xl flex items-center gap-3">
+      <div className="text-[#E4002B]">{icon || "•"}</div>
+      <div>
+        <div className="text-xs text-gray-600">{title}</div>
+        <div className="text-lg font-semibold">{value}</div>
+      </div>
+    </div>
+  );
+}
+
+function KTask({ title, done, progress, total }){
+  return (
+    <div className="p-4 border rounded-2xl">
+      <div className="flex items-center justify-between mb-2">
+        <div className="font-medium">{title}</div>
+        {done ? (
+          <span className="px-2 py-1 rounded-full text-xs bg-emerald-600 text-white">Awarded</span>
+        ) : (
+          <span className="px-2 py-1 rounded-full text-xs border">In progress</span>
+        )}
+      </div>
+      {!done && total>0 && (
+        <div className="grid gap-2">
+          <div className="text-xs text-gray-600">{progress} of {total} tasks completed</div>
+          <ProgressBar value={(progress/total)*100} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ---- App ------------------------------------------------------------------
+function App() {
+  const [view, setView] = useState("home");
+  const [selectedAgent, setSelectedAgent] = useState(null);
+
+  const handleOpen = (agent) => {
+    setSelectedAgent(enrichAgent(agent)); // ensure full detail data exists
+    setView("detail");
+  };
+
+  const handleRegister = () => setView("register");
+  const handleBack = () => {
+    setView("home");
+    setSelectedAgent(null);
+  };
+
+  return (
+    <div className="min-h-screen bg-gray-50">
+      <Header onHome={handleBack} onRegister={handleRegister} />
+      {view === "home" && <Home onOpen={handleOpen} onRegister={handleRegister} />}
+      {view === "detail" && selectedAgent && <AgentDetail agent={selectedAgent} onBack={handleBack} />}
+      {view === "register" && <RegisterAgent onCancel={handleBack} />}
+    </div>
+  );
+}
+
+function Header({ onHome, onRegister }) {
+  return (
+    <header className="bg-black text-white">
+      <div className="max-w-6xl mx-auto px-6 py-8 flex flex-col items-start gap-3">
+        <h1 className="text-4xl font-extrabold tracking-tight">Agentic Marketplace</h1>
+        <p className="text-sm text-gray-300">
+          <span className="font-semibold">Search</span>, <span className="font-semibold">Register</span>, <span className="font-semibold">Use</span>, and <span className="font-semibold">Govern</span> <span className="font-semibold">Proprietary Agents</span> or otherwise.
+        </p>
+        <div className="h-1 w-24" style={{ background: "#E4002B" }} />
+        <div className="mt-2 flex gap-3">
+          <button onClick={onHome} className="px-4 py-2 rounded-lg font-semibold text-black" style={{ background: "#E4002B" }}>Catalogue</button>
+          <button onClick={onRegister} className="px-4 py-2 rounded-lg border border-white text-white hover:bg-white hover:text-black">Register Agent</button>
+        </div>
+      </div>
+    </header>
+  );
+}
+
+// ---- Home (Dashboard + Catalogue) -----------------------------------------
+function Home({ onOpen, onRegister }) {
+  const [query, setQuery] = useState("");
+  const [stageFilter, setStageFilter] = useState("");
+
+  const agents = [
+    { id: 1, name: "Payments Fraud Detector", status: "LIVE", department: "Payments", domain: "Retail", subdomain: "Risk" },
+    { id: 2, name: "Mortgage Document Classifier", status: "VALIDATED", department: "Lending", domain: "Home Loans", subdomain: "Origination" },
+    { id: 3, name: "KYC/AML Verification", status: "LIVE", department: "Compliance", domain: "Risk", subdomain: "Identity" },
+    { id: 4, name: "Contact Centre Transcriber", status: "LIVE", department: "Contact Centre", domain: "Digital", subdomain: "Speech" },
+    { id: 5, name: "Transaction Categorisation", status: "IN_DEVELOPMENT", department: "Everyday Banking", domain: "Retail", subdomain: "Personal" },
+    { id: 6, name: "Business Lending Portfolio Scout", status: "VALIDATED", department: "Business Banking", domain: "SME", subdomain: "Insights" },
+    { id: 7, name: "Credit Risk Heatmap", status: "LIVE", department: "Risk", domain: "Enterprise", subdomain: "Monitoring" },
+    { id: 8, name: "Wealth Advisory Summariser", status: "IN_DEVELOPMENT", department: "Wealth", domain: "Investments", subdomain: "Advice" },
+    { id: 9, name: "Customer Sentiment Analyser", status: "LIVE", department: "Digital", domain: "CX", subdomain: "Feedback" },
+    { id: 10, name: "Incident Postmortem Assistant", status: "VALIDATED", department: "Technology", domain: "SRE", subdomain: "Analytics" },
+  ];
+
+  const stageCounts = React.useMemo(() => {
+    const counts = Object.fromEntries(STAGES.map((s) => [s, 0]));
+    agents.forEach((a) => { counts[a.status] = (counts[a.status] || 0) + 1; });
+    return counts;
+  }, [agents]);
+
+  const total = agents.length || 1;
+
+  const filtered = React.useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return agents.filter((a) => {
+      const passText = !q || a.name.toLowerCase().includes(q) || a.department.toLowerCase().includes(q) || a.domain.toLowerCase().includes(q) || a.subdomain.toLowerCase().includes(q);
+      const passStage = !stageFilter || a.status === stageFilter;
+      return passText && passStage;
+    });
+  }, [query, stageFilter]);
+
+  const toggleStage = (stage) => setStageFilter((curr) => (curr === stage ? "" : stage));
+  const clearAll = () => { setQuery(""); setStageFilter(""); };
+
+  return (
+    <main className="max-w-6xl mx-auto px-6 py-8 grid gap-6">
+      {/* Quick Dashboard: stages snapshot (click to filter) */}
+      <section className="grid sm:grid-cols-2 lg:grid-cols-5 gap-4">
+        {STAGES.map((stage) => {
+          const active = stageFilter === stage;
+          const pct = Math.round(((stageCounts[stage] || 0) / total) * 100);
+          return (
+            <button
+              key={stage}
+              onClick={() => toggleStage(stage)}
+              onKeyDown={(e)=>{ if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleStage(stage); } }}
+              aria-pressed={active}
+              className={`text-left bg-white rounded-xl shadow-sm p-4 border transition ${active ? 'border-[#E4002B] ring-1 ring-[#E4002B]/30' : 'border-gray-100 hover:border-red-200'}`}
+            >
+              <div className="flex items-center justify-between">
+                <div className="font-semibold text-sm">{stage.replace(/_/g, " ")}</div>
+                <StatusPill status={stage} />
+              </div>
+              <div className="mt-3">
+                <div className="text-2xl font-extrabold">{stageCounts[stage] || 0}</div>
+                <div className="text-xs text-gray-500">of {total} agents</div>
+                <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden mt-2">
+                  <div className="h-2" style={{ width: `${pct}%`, background: stage === "LIVE" ? "#10B981" : stage === "VALIDATED" ? "#3B82F6" : stage === "IN_DEVELOPMENT" ? "#F59E0B" : "#9CA3AF" }} />
+                </div>
+              </div>
+              {active && <div className="mt-3 text-xs text-[#E4002B]">Filtering catalogue by this stage</div>}
+            </button>
+          );
+        })}
+      </section>
+
+      {(stageFilter || query) && (
+        <div className="flex items-center gap-2 text-sm">
+          {stageFilter && (
+            <span className="inline-flex items-center gap-2 px-2 py-1 rounded-full bg-red-100 text-[#E4002B]">
+              Stage: {stageFilter.replace(/_/g, " ")}
+              <button className="ml-1" onClick={() => setStageFilter("")}>✕</button>
+            </span>
+          )}
+          {query && (
+            <span className="inline-flex items-center gap-2 px-2 py-1 rounded-full bg-gray-100 text-gray-700">
+              Search: “{query}”
+              <button className="ml-1" onClick={() => setQuery("")}>✕</button>
+            </span>
+          )}
+          <button onClick={clearAll} className="ml-auto underline text-gray-600">Clear all</button>
+        </div>
+      )}
+
+      <div className="bg-white rounded-xl shadow-sm p-4 flex flex-col md:flex-row md:items-end md:justify-between gap-4">
+        <div className="flex-1">
+          <label className="text-sm text-gray-600">Search by keyword</label>
+          <div className="relative">
+            <span className="absolute left-3 top-2.5 text-gray-400">🔎</span>
+            <input
+              className="pl-8 w-full border rounded-lg h-10 px-3"
+              placeholder="Try: Payments, Mortgage, Risk, CX…"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+            />
+          </div>
+        </div>
+        <button onClick={onRegister} className="px-4 py-2 rounded-lg font-semibold text-black" style={{ background: "#E4002B" }}>➕ Register Agent</button>
+      </div>
+
+      <section className="grid md:grid-cols-2 xl:grid-cols-3 gap-6">
+        {filtered.map((a) => (
+          <article key={a.id} className="rounded-2xl shadow-sm bg-white p-5 grid gap-3 border border-transparent hover:border-red-200 transition">
+            <div className="flex items-start justify-between">
+              <div>
+                <h3 className="font-semibold text-lg text-black">{a.name}</h3>
+                <p className="text-xs text-gray-600">{a.department} • {a.domain} • {a.subdomain}</p>
+              </div>
+              <StatusPill status={a.status} />
+            </div>
+            <p className="text-xs text-gray-600">Stage: {a.status.replace(/_/g, " ")} • Governance maturity recorded</p>
+            <div className="flex items-center justify_between">
+              <button onClick={() => onOpen(a)} className="px-3 py-1.5 rounded-lg text-white text-xs" style={{ background: "#E4002B" }}>Open</button>
+              <button onClick={() => onOpen(a)} className="text-sm underline text-gray-600" style={{marginLeft: 'auto'}}>Details</button>
+            </div>
+          </article>
+        ))}
+        {filtered.length === 0 && (
+          <div className="col-span-full text-sm text-gray-600">No agents match the current filters.</div>
+        )}
+      </section>
+
+      <footer className="py-6">
+        <div className="h-1 w-24" style={{ background: "#E4002B" }} />
+        <p className="text-xs text-gray-500 mt-2">NAB-inspired design theme (demonstration only; no logos or trademarks used).</p>
+      </footer>
+    </main>
+  );
+}
+
+// ---- Detail (full tabs restored) ------------------------------------------
+function AgentDetail({ agent, onBack }) {
+  const [tab, setTab] = useState("details");
+  return (
+    <div className="max-w-6xl mx-auto px-6 py-8 grid gap-6">
+      <button onClick={onBack} className="text-sm text-gray-600 hover:underline">← Back to Catalogue</button>
+
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-2xl font-bold text-black">{agent.name}</h2>
+          <div className="flex gap-2 mt-2 flex-wrap">
+            <StatusPill status={agent.status} />
+            <Pill>{agent.department}</Pill>
+            <Pill>{agent.domain}</Pill>
+            <Pill>{agent.subdomain}</Pill>
+          </div>
+        </div>
+        <div className="text-right">
+          <div className="text-sm text-gray-600">Live shells</div>
+          <div className="flex gap-2 justify-end">{agent.shells.map((s)=> <Pill key={s}>{s}</Pill>)}</div>
+        </div>
+      </div>
+
+      <div className="border-b flex gap-4 text-sm">
+        {["details","kangaroos","versions","usage","audit","compliance"].map(k => (
+          <button key={k} className={`pb-2 -mb-px ${tab===k? 'border-b-2 border-[#E4002B] text-[#E4002B]':'text-gray-600'}`} onClick={()=>setTab(k)}>
+            {k.charAt(0).toUpperCase()+k.slice(1)}
+          </button>
+        ))}
+      </div>
+
+      {tab==='details' && (
+        <div className="bg_white rounded-xl shadow-sm p-6 grid md:grid-cols-2 gap-6">
+          <div>
+            <h4 className="font-semibold mb-2">Description</h4>
+            <p className="text-sm text-gray-700">{agent.description}</p>
+            <div className="mt-4 grid gap-2 text-sm">
+              <div className="flex items-center gap-2">🌿 <a className="underline" href="#">{agent.repo.github}</a></div>
+              <div className="flex items-center gap-2">📄 <a className="underline" href="#">{agent.repo.roadmap}</a></div>
+              <div className="flex items_center gap-2">⚠️ <a className="underline" href="#">{agent.repo.bugs}</a></div>
+            </div>
+          </div>
+          <div>
+            <h4 className="font-semibold mb-2">Owners</h4>
+            <ul className="text-sm grid gap-1">
+              <li><strong>Product:</strong> {agent.owners.product}</li>
+              <li><strong>Design:</strong> {agent.owners.design}</li>
+              <li><strong>Technology:</strong> {agent.owners.tech}</li>
+              <li><strong>Architecture:</strong> {agent.owners.arch}</li>
+              <li><strong>Operations:</strong> {agent.owners.ops}</li>
+            </ul>
+          </div>
+        </div>
+      )}
+
+      {tab==='kangaroos' && (
+        <div className="bg-white rounded-xl shadow-sm p-6 grid md:grid-cols-2 gap-4">
+          <KTask title="Product Kangaroo" done />
+          <KTask title="Design Kangaroo" done />
+          <KTask title="Technology Kangaroo" done />
+          <KTask title="Architecture Kangaroo" progress={5} total={7} />
+          <KTask title="Operations Kangaroo" done />
+        </div>
+      )}
+
+      {tab==='versions' && (
+        <div className="bg-white rounded-xl shadow-sm overflow-hidden">
+          <table className="w-full text-sm">
+            <thead className="bg-gray-100 text-gray-600">
+              <tr>
+                <th className="text-left p-3">Version Alias</th>
+                <th className="text-left p-3">Status</th>
+                <th className="text-left p-3">Created</th>
+                <th className="text-left p-3">Updated</th>
+                <th className="text-left p-3">Updated By</th>
+              </tr>
+            </thead>
+            <tbody>
+              {agent.versions.map((v) => (
+                <tr key={v.alias} className="border-t">
+                  <td className="p-3">{v.alias}</td>
+                  <td className="p-3"><StatusPill status={v.status} /></td>
+                  <td className="p-3">{v.createdAt}</td>
+                  <td className="p-3">{v.updatedAt}</td>
+                  <td className="p-3">{v.by}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {tab==='usage' && (
+        <div className="bg-white rounded-xl shadow-sm p-6 grid md:grid-cols-5 gap-4 text-sm">
+          <Stat title="Average Kangaroos" value={`${agent.usage.avgKangaroos}`} icon="✅" />
+          <Stat title="≥3 Kangaroos" value={`${agent.usage.percentGte3}%`} icon="🛡️" />
+          <Stat title="Reused across shells" value={`${agent.usage.reusedAcross}`} icon="#" />
+          <Stat title="Monthly runs" value={`${agent.usage.monthlyRuns}`} icon="🔄" />
+          <Stat title="P95 latency" value={`${agent.usage.p95LatencyMs} ms`} icon="⏱️" />
+        </div>
+      )}
+
+      {tab==='audit' && (
+        <div className="bg-white rounded-xl shadow-sm overflow-hidden">
+          <table className="w-full text-sm">
+            <thead className="bg-gray-100 text-gray-600">
+              <tr>
+                <th className="text-left p-3">User</th>
+                <th className="text-left p-3">Entity</th>
+                <th className="text-left p-3">Action</th>
+                <th className="text-left p-3">Updated At</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(agent.audit && agent.audit.length ? agent.audit : [{ user:"—", entity:"Agent", action:"CREATED", at:"—" }]).map((r, i)=> (
+                <tr key={i} className="border-t">
+                  <td className="p-3">{r.user}</td>
+                  <td className="p-3">{r.entity}</td>
+                  <td className="p-3"><Pill tone={r.action==="UPDATED"?"bg-orange-100 text-orange-700":"bg-emerald-100 text-emerald-700"}>{r.action}</Pill></td>
+                  <td className="p-3">{r.at}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {tab==='compliance' && (
+        <div className="bg-white rounded-xl shadow-sm p-6 grid gap-4">
+          {(!agent.compliance || agent.compliance.length === 0) && <p className="text-sm text-gray-600">No compliance issues found in last audit.</p>}
+          {(agent.compliance || []).map((c, i)=> (
+            <div key={i} className="flex items-start gap-3 p-3 border rounded-xl">
+              <span className="text-amber-600 mt-0.5">⚠️</span>
+              <div className="text-sm">
+                <div className="font-medium">{c.issue} — <span className="text-amber-700">{c.status}</span></div>
+                <div className="text-gray-700">{c.description}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ---- Data enrichment to ensure full detail exists -------------------------
+function enrichAgent(a) {
+  const base = {
+    description: "Agent allows bankers to review a customer's financial summary and provides list & details of all their accounts.",
+    shells: ["nabONE", "Ubank"],
+    owners: { product: "Product Owner", design: "Design Owner", tech: "Tech Owner", arch: "Principal Architect", ops: "Ops Owner" },
+    versions: [
+      { alias: "staging-aks", status: "VALIDATED", createdAt: "2024-03-01", updatedAt: "2024-05-12", by: "P821001" },
+      { alias: "prod-aks", status: "LIVE", createdAt: "2024-06-15", updatedAt: "2024-10-03", by: "P821001" },
+    ],
+    audit: [
+      { user: "N121734", entity: "Agent", action: "UPDATED", at: "2024-10-03 13:01:36 AEDT" },
+    ],
+    compliance: [
+      { issue: "UI library minimum version", status: "WARNING", description: "@nab/nui-react has newer version" },
+    ],
+    usage: { avgKangaroos: 4, percentGte3: 85, reusedAcross: 4, monthlyRuns: 12500, p95LatencyMs: 780 },
+  };
+
+  const overrides = {
+    "Payments Fraud Detector": {
+      description: "Detects anomalous payment patterns in near real-time and triggers step-up verification.",
+      owners: { product: "Liam Turner", design: "Olivia Grant", tech: "System", arch: "—", ops: "Mia" },
+      shells: ["nabONE"],
+      usage: { avgKangaroos: 5, percentGte3: 100, reusedAcross: 6, monthlyRuns: 15000, p95LatencyMs: 600 },
+    },
+    "Mortgage Document Classifier": {
+      description: "Classifies mortgage documents and extracts key entities to accelerate origination.",
+      owners: { product: "Sophie Brown", design: "—", tech: "Alan Kim", arch: "—", ops: "Tina" },
+      shells: ["nabONE"],
+    },
+    "KYC/AML Verification": {
+      description: "Verifies identity documents and screens against watchlists to meet AML obligations.",
+      owners: { product: "Ava Lim", design: "—", tech: "Ken Yip", arch: "—", ops: "Luke" },
+    },
+  };
+
+  const repoDefault = { github: "org/repo", roadmap: "Roadmap Hub", bugs: "issues" };
+  return {
+    ...a,
+    ...base,
+    ...(overrides[a.name] || {}),
+    repo: repoDefault,
+  };
+}
+
+// ---- Register --------------------------------------------------------------
+function RegisterAgent({ onCancel }) {
+  return (
+    <div className="max-w-5xl mx-auto px-6 py-8 grid gap-6">
+      <h2 className="text-2xl font-bold">Register New Agent</h2>
+      <div className="bg-white rounded-xl shadow-sm p-6 grid gap-4">
+        <input className="border rounded-lg h-10 px-3" placeholder="Agent Name" />
+        <input className="border rounded-lg h-10 px-3" placeholder="Department" />
+        <input className="border rounded-lg h-10 px-3" placeholder="Domain" />
+        <input className="border rounded-lg h-10 px-3" placeholder="Subdomain" />
+        <textarea className="border rounded-lg px-3 py-2" placeholder="Description" />
+        <div className="flex items-center justify-end gap-3">
+          <button onClick={onCancel} className="px-4 py-2 border rounded-lg">Cancel</button>
+          <button className="px-4 py-2 rounded-lg text-white" style={{ background: "#E4002B" }}>Register</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Mount
+const root = ReactDOM.createRoot(document.getElementById('root'));
+root.render(React.createElement(App));
+
+    </script>
+  </body>
+</html>
